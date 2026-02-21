@@ -1,45 +1,52 @@
-export default async (req) => {
-  const url = new URL(req.url);
-  const targetUrl = url.searchParams.get("url");
+const node_fetch = typeof fetch === "undefined" ? require("node-fetch") : fetch;
 
+exports.handler = async function (event, context) {
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
     "Content-Type": "application/json; charset=utf-8",
   };
 
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers });
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers, body: "" };
   }
 
+  const targetUrl = event.queryStringParameters && event.queryStringParameters.url;
+
   if (!targetUrl) {
-    return new Response(
-      JSON.stringify({ error: "Paramètre 'url' manquant." }),
-      { status: 400, headers }
-    );
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ error: "Paramètre 'url' manquant." }),
+    };
   }
 
   try {
     new URL(targetUrl);
-  } catch {
-    return new Response(
-      JSON.stringify({ error: "URL invalide. Vérifiez le format (ex: https://example.com)." }),
-      { status: 400, headers }
-    );
+  } catch (_) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({
+        error: "URL invalide. Vérifiez le format (ex: https://example.com).",
+      }),
+    };
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(function () {
+    controller.abort();
+  }, 10000);
 
   try {
-    let response;
-    let finalUrl = targetUrl;
-    let redirectCount = 0;
-    const maxRedirects = 3;
+    var response;
+    var finalUrl = targetUrl;
+    var redirectCount = 0;
+    var maxRedirects = 3;
+    var currentUrl = targetUrl;
 
-    let currentUrl = targetUrl;
     while (redirectCount <= maxRedirects) {
-      response = await fetch(currentUrl, {
+      response = await node_fetch(currentUrl, {
         signal: controller.signal,
         redirect: "manual",
         headers: {
@@ -52,7 +59,7 @@ export default async (req) => {
       });
 
       if ([301, 302, 303, 307, 308].includes(response.status)) {
-        const location = response.headers.get("location");
+        var location = response.headers.get("location");
         if (!location) break;
         currentUrl = new URL(location, currentUrl).toString();
         finalUrl = currentUrl;
@@ -63,40 +70,43 @@ export default async (req) => {
     }
 
     if (!response.ok) {
-      return new Response(
-        JSON.stringify({
-          error: `La page a retourné une erreur HTTP ${response.status}. Vérifiez que l'URL est accessible.`,
+      return {
+        statusCode: 502,
+        headers,
+        body: JSON.stringify({
+          error:
+            "La page a retourné une erreur HTTP " +
+            response.status +
+            ". Vérifiez que l'URL est accessible.",
         }),
-        { status: 502, headers }
-      );
+      };
     }
 
-    const html = await response.text();
+    var html = await response.text();
 
-    return new Response(
-      JSON.stringify({ html, finalUrl, status: response.status }),
-      { status: 200, headers }
-    );
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ html: html, finalUrl: finalUrl, status: response.status }),
+    };
   } catch (err) {
     if (err.name === "AbortError") {
-      return new Response(
-        JSON.stringify({
+      return {
+        statusCode: 504,
+        headers,
+        body: JSON.stringify({
           error: "Timeout : la page n'a pas répondu dans les 10 secondes.",
         }),
-        { status: 504, headers }
-      );
+      };
     }
-    return new Response(
-      JSON.stringify({
-        error: `Impossible d'accéder à la page : ${err.message}`,
+    return {
+      statusCode: 502,
+      headers,
+      body: JSON.stringify({
+        error: "Impossible d'accéder à la page : " + err.message,
       }),
-      { status: 502, headers }
-    );
+    };
   } finally {
     clearTimeout(timeout);
   }
-};
-
-export const config = {
-  path: "/.netlify/functions/fetch-page",
 };
