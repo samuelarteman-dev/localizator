@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #2563EB;
+  --color-primary-hover: #1d4ed8;
+  --color-error: #DC2626;
+  --color-warning: #D97706;
+  --color-success: #16A34A;
+  --color-gray-text: #374151;
+  --color-gray-light: #F8F9FA;
+  --font-family-sans: 'Inter', sans-serif;
+}
+
+body {
+  font-family: var(--font-family-sans);
+  color: var(--color-gray-text);
+  background-color: var(--color-gray-light);
+  margin: 0;
+  min-height: 100vh;
+}
